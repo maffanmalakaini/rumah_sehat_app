@@ -70,8 +70,6 @@ class _HomeScreenState extends State<HomeScreen> {
     String selectedBranch = 'RUMAH SEHAT, JAKARTA PUSAT';
     final List<String> branches = [
       'RUMAH SEHAT, JAKARTA PUSAT',
-      'RUMAH SEHAT, JAKARTA SELATAN',
-      'RUMAH SEHAT, BANDUNG',
     ];
 
     return Scaffold(

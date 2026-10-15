@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,29 +12,59 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  void _handleLogin() {
-    String email = _emailController.text.trim();
-    // Mengambil nama depan dari email untuk display jika tidak ada data dari API
-    String nameFromEmail = email.contains('@') ? email.split('@')[0] : 'User';
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-    if (email.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Harap isi Email dan Password!')),
-      );
+  void _showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage('Harap isi Email dan Password!');
       return;
     }
 
-    // Pindah ke HomeScreen sambil membawa data Email & Nama
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(
-          userName: nameFromEmail,
-          userEmail: email,
-        ),
-      ),
-    );
+    setState(() => _isLoading = true);
+
+    try {
+      // Kirim email & password ke endpoint POST /api/login
+      final result = await ApiService.login(email, password);
+
+      if (!mounted) return;
+
+      if (result['statusCode'] == 200) {
+        // Ambil data user dari respons Laravel: { message, data: {...user} }
+        final user = result['data']['data'];
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(
+              userName: user['name'],
+              userEmail: user['email'],
+            ),
+          ),
+        );
+      } else {
+        _showMessage(result['data']['message'] ?? 'Login gagal');
+      }
+    } catch (e) {
+      // Terjadi kalau server Laravel mati / alamat salah
+      if (!mounted) return;
+      _showMessage('Tidak bisa terhubung ke server');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -58,6 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
             const SizedBox(height: 32),
             TextField(
               controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 prefixIcon: Icon(Icons.email),
@@ -79,21 +111,30 @@ class _LoginScreenState extends State<LoginScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _handleLogin,
+                onPressed: _isLoading ? null : _handleLogin,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E70EB),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text(
-                  'MASUK',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'MASUK',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
             ),
             TextButton(

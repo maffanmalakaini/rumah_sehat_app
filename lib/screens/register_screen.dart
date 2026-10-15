@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import 'home_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -12,28 +13,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false;
 
-  void _handleRegister() {
-    String name = _nameController.text.trim();
-    String email = _emailController.text.trim();
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-    if (name.isEmpty || email.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Harap isi semua kolom!')),
-      );
+  void _showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _handleRegister() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      _showMessage('Harap isi semua kolom!');
       return;
     }
 
-    // Pindah ke HomeScreen sambil membawa data Input Nama & Email
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(
-          userName: name,
-          userEmail: email,
-        ),
-      ),
-    );
+    setState(() => _isLoading = true);
+
+    try {
+      // Kirim data ke endpoint POST /api/register (tersimpan di tabel users)
+      final result = await ApiService.register(name, email, password);
+
+      if (!mounted) return;
+
+      if (result['statusCode'] == 201) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(
+              userName: name,
+              userEmail: email,
+            ),
+          ),
+        );
+      } else {
+        // Contoh gagal: email sudah dipakai / password kurang dari 6 karakter
+        _showMessage(result['data']['message'] ?? 'Registrasi gagal');
+      }
+    } catch (e) {
+      // Terjadi kalau server Laravel mati / alamat salah
+      if (!mounted) return;
+      _showMessage('Tidak bisa terhubung ke server');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -60,6 +92,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 prefixIcon: Icon(Icons.email),
@@ -71,7 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               controller: _passwordController,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: 'Password',
+                labelText: 'Password (minimal 6 karakter)',
                 prefixIcon: Icon(Icons.lock),
                 border: OutlineInputBorder(),
               ),
@@ -81,21 +114,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _handleRegister,
+                onPressed: _isLoading ? null : _handleRegister,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1E70EB),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text(
-                  'DAFTAR',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'DAFTAR',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
             ),
           ],
